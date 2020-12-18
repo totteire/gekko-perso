@@ -10,10 +10,11 @@ method.sell = function (log) {
   this.position = 'OUT'
   console.log('SELLING:', log)
 }
-method.buy = function (price) {
+method.buy = function (price, log) {
   this.advice('long')
   this.position = 'IN'
   this.buying_price = price
+  log && console.log('BUYING:', log)
 }
 method.getCandleCenter = function (candle) {
   return candle.low + ((candle.high - candle.low) / 2)
@@ -97,7 +98,7 @@ method.check = function (candle) {
     const [bma_old, bma_new] = this.bmaHistory
     const vol_avg = this.candleHistory.map(c => c.volume).reduce((a, b) => a + b) / this.settings.CANDLE_HISTORY_SIZE
     if (bma_old < bma_new && candle.close > bb_up && candle.volume > vol_avg) {
-      this.buy(candle.close)
+      this.buy(candle.close, `Price = ${candle.close}`)
       this.highest_price = 0
     }
   }
@@ -107,7 +108,7 @@ method.check = function (candle) {
   else {
     // CHECK INITIAL STOP LOSS
     if (candle.close < this.buying_price * (1 - this.settings.INITIAL_STOP_LOSS)) {
-      this.sell('INITIAL STOP LOSS')
+      this.sell(`INITIAL STOP LOSS, Price = ${candle.close}`)
     }
 
     // START BULL RUN
@@ -116,19 +117,22 @@ method.check = function (candle) {
       // on retrace à balle
       if (candle.low < this.highest_price - (this.highest_price - this.buying_price) * this.settings.WAVE_THRESHOLD_RETRACEMENT) {
         if (!this.retracementPrice) this.retracementPrice = candle.low
-        if (candle.low < this.retracementPrice) {
+        if (candle.low < this.retracementPrice && this.retracementPrice>this.buying_price) {
           this.retracementPrice = candle.low
+          console.log('Min price retracement = ', this.retracementPrice)
         }
       }
 
       // la vague remonte au dessus du max (la deuxieme vague est là)
       if (this.retracementPrice && candle.close > this.highest_price) {
         this.buying_price = this.retracementPrice
+        this.retracementPrice = false
       }
 
       // si retracement de x% entre high et buying_price SELL
       if (candle.close < this.highest_price - (this.highest_price - this.buying_price) * this.settings.WINNING_STOP_LOSS_RETRACE) {
-        this.sell(`Retracement > ${this.settings.WINNING_STOP_LOSS_RETRACE * 100}%`)
+        this.sell(`Retracement > ${this.settings.WINNING_STOP_LOSS_RETRACE * 100}%, Price = ${candle.close}`)
+        this.retracementPrice = false
       }
 
       // reset high price
