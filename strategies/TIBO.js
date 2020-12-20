@@ -1,8 +1,27 @@
-// helpers
-var log = require('../core/log.js')
+const FiboLudo = require('./utils/fiboLudo.js')
 
-// let's create our own method
-var method = {}
+const method = {}
+
+method.init = function () {
+  this.name = 'TILU'
+  this.position = 'OUT'
+  this.maDiffHistory = []
+  this.maHistory = []
+  this.rsiHistory = []
+  this.macdDiffHistory = []
+  this.buying_price = false
+  this.MAX_MA_DIFF_SIZE = 10
+  this.MAX_MACD_DIFF_SIZE = 2
+  this.fiboLudo = FiboLudo
+
+  this.addIndicator('small_ma', 'SMA', this.settings.SMALL_MA)
+  this.addIndicator('medium_ma', 'SMA', this.settings.MEDIUM_MA)
+  this.addIndicator('big_ma', 'SMA', this.settings.BIG_MA)
+  this.addIndicator('rsi', 'RSI', this.settings.RSI);
+  this.addIndicator('macd', 'MACD', this.settings.MACD);
+
+  console.log(this.settings)
+}
 
 method.sell = function (log) {
   this.advice('short')
@@ -14,30 +33,6 @@ method.buy = function (price) {
   this.position = 'IN'
   this.buying_price = price
 }
-method.getCandleCenter = function (candle) {
-  return candle.low + ((candle.high - candle.low) / 2)
-}
-
-method.init = function () {
-  this.name = 'TRIPLE_MA_2'
-  this.position = 'OUT'
-  this.highest_price = 0
-  this.maDiffHistory = []
-  this.rsiHistory = []
-  this.MAX_MA_DIFF_SIZE = 10
-  this.macdDiffHistory = []
-  this.MAX_MACD_DIFF_SIZE = 2
-  this.buy_reason = '?'
-
-  // define the indicators we need
-  this.addIndicator('small_ma', 'SMA', this.settings.SMALL_MA)
-  this.addIndicator('medium_ma', 'SMA', this.settings.MEDIUM_MA)
-  this.addIndicator('big_ma', 'SMA', this.settings.BIG_MA)
-  this.addIndicator('rsi', 'RSI', this.settings.RSI);
-  this.addIndicator('macd', 'MACD', this.settings.MACD);
-
-  console.log(this.settings)
-}
 
 method.update = function (candle) {
   this.indicators.small_ma.update(candle.close)
@@ -47,17 +42,14 @@ method.update = function (candle) {
   this.maDiffHistory.push(this.indicators.small_ma.result - this.indicators.big_ma.result)
   if (this.maDiffHistory.length > this.MAX_MA_DIFF_SIZE) this.maDiffHistory.shift()
 
+  this.maHistory.push({ sma: this.indicators.small_ma.result, mma: this.indicators.medium_ma.result, bma: this.indicators.big_ma.result })
+  if (this.maHistory.length > 2) this.maHistory.shift()
+
   this.macdDiffHistory.push(this.indicators.macd.diff)
   if (this.macdDiffHistory.length > this.MAX_MACD_DIFF_SIZE) this.macdDiffHistory.shift()
 
   this.rsiHistory.push(this.indicators.rsi.result)
   if (this.rsiHistory.length > 2) this.rsiHistory.shift()
-
-  if (candle.close > this.highest_price)
-    this.highest_price = candle.close
-}
-
-method.log = () => {
 }
 
 method.check = function (candle) {
@@ -77,93 +69,35 @@ method.check = function (candle) {
     this.currentTrend = '?'
   }
 
-  /*******
-   * BUY *
-   *******/
-
   if (this.position === 'OUT') {
-    // BULL => BUY
-    // if (this.currentTrend === 'bull' && macd >= 0) {
-    //   this.buy(candle.close)
-    // }
+    /*******
+     * BUY *
+     *******/
 
-    // RSI SIGNAL
-    // if (rsi < 30) {
-    //   this.buy(candle.close)
-    //   this.buy_reason = 'RSI_SIGNAL'
-    // }
     // BULL RUN
-    console.log(this.currentTrend, macd, rsiTrend)
-    if (this.currentTrend === 'bull' && macd > 0 && rsiTrend === 'UP') {
+    const [ma_old, ma_new] = this.maHistory
+    if (this.currentTrend === 'bull' && macd > 0 && rsiTrend === 'UP' && ma_old.bma < ma_new.bma) {
       this.buy(candle.close)
-      this.buy_reason = 'BULL_RUN'
+      this.fiboLudo.start({ buyingCandle: candle })
     }
 
-    // if (this.currentTrend === 'bear') {
-    //   if (candle.open < sma && candle.close < sma) {
-    //     this.buy(candle.close)
-    //   }
-    // }
-
-    // const delta_ma = Math.abs(this.maDiffHistory.reduce((a, b) => a + b) / this.maDiffHistory.length)
-    // // @TODO think about macD crossover
-    // if (
-    //   this.currentTrend === 'bear' &&
-    //   this.getCandleCenter(candle) > mma &&
-    //   delta_ma > 0.005
-    // ) {
-    //   console.log(`BUYING: ${candle.start._d} : delta=${delta_ma.toFixed(4)}`)
-    //   this.buy(candle.close)
-    // }
   }
-  /*******
-   * SELL *
-   *******/
+
   else {
+    /********
+     * SELL *
+     *******/
+
     // CHECK INITIAL STOP LOSS
     if (candle.close < this.buying_price * (1 - this.settings.INITIAL_STOP_LOSS)) {
-      this.sell('INITIAL STOP LOSS')
+      return this.sell(`Trade margin = ${((candle.close - this.buying_price) / candle.close * 100).toFixed(2)}% STOP LOSS`)
     }
-
-    if (this.buy_reason === 'BULL_RUN') {
-      if (sma < mma) {
-          this.sell(`MA${this.settings.SMALL_MA} crossover`)
-      }
-    }
-
-    // if (candle.close > this.buying_price + (this.buying_price * 0.01)) {
-    //   this.sell('made 1%')
-    // }
-
-    // if (this.buy_reason === 'RSI_SIGNAL') {
-    //   const [rsi_old, rsi_new] = this.rsiHistory
-    //   if (rsi_new < rsi_old) {
-    //     this.sell('RSI going back down')
-    //   }
-    // }
-
-    // const [macd_old, macd_new] = this.macdDiffHistory
-    // if (macd_new > 0.00005 && macd_new < macd_old) {
-    //   this.sell('macd diff going back down')
-    // } else if (candle.close > this.buying_price + (this.buying_price * 0.02) && this.currentTrend !== 'bull') {
-    //   this.sell('Got 2%')
-    // }
-
-    // // CHECK RETRACE STOP LOSS
-    // if (candle.close > this.highest_price) this.highest_price = candle.close
-    // const didIMakeEnoughMoney = candle.close > this.buying_price * (1 + this.settings.WINNING_STOP_LOSS_THRESHOLD)
-    // if (didIMakeEnoughMoney) {
-    //   const max_retrace_price = this.buying_price + (this.highest_price - this.buying_price) * (1 - this.settings.WINNING_STOP_LOSS_RETRACE)
-    //   if (candle.close < max_retrace_price) {
-    //     this.sell('TRAILING STOP LOSS')
-    //   }
-    // }
-
-    // // CHECK CANDLE CROSSING MMA
-    // const candleCenter = this.getCandleCenter(candle)
-    // if (candleCenter < mma) {
-    //   this.sell(`candle ${candleCenter} < mma ${mma}`)
-    // }
+    // CHECK FIBOLUDO
+    this.fiboLudo.check({
+      candle,
+      settings: this.settings,
+      onSell: () => this.sell(`Trade margin = ${((candle.close - this.buying_price) / candle.close * 100).toFixed(2)}%`)
+    })
 
   }
 }
