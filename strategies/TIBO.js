@@ -1,4 +1,7 @@
-const FiboLudo = require('./utils/fiboLudo.js')
+const fs = require('fs')
+const toml = require('toml')
+const FiboLudo = require('./utils/fiboLudo')
+const notif = require('./utils/notification')
 
 const method = {}
 
@@ -33,6 +36,24 @@ method.buy = function (price) {
   this.position = 'IN'
   this.buying_price = price
 }
+method.setTrend = function ({ sma, mma, bma }) {
+  if (sma > mma && mma > bma) {
+    this.currentTrend = 'bull'
+  } else if (sma < mma && mma < bma) {
+    this.currentTrend = 'bear'
+  } else {
+    this.currentTrend = '?'
+  }
+}
+method.setLines = function() {
+  try {
+    const Lines = toml.parse(fs.readFileSync('../inputs/GRTETH.toml'))
+    console.log('read lines: ', lines)
+  } catch(err) {
+    console.error(err)
+  }
+
+}
 
 method.update = function (candle) {
   this.indicators.small_ma.update(candle.close)
@@ -61,25 +82,21 @@ method.check = function (candle) {
   const rsiTrend = (rsi_new > rsi_old) ? 'UP' : 'DOWN'
   const { diff: macd } = this.indicators.macd
 
-  if (sma > mma && mma > bma) {
-    this.currentTrend = 'bull'
-  } else if (sma < mma && mma < bma) {
-    this.currentTrend = 'bear'
-  } else {
-    this.currentTrend = '?'
-  }
+  // this.setTrend({ sma, mma, bma })
+  // this.setLines()
+
+  notif.sendNotification({ title: 'GRT/ETH', message: `candle close: ${candle.close}`})
 
   if (this.position === 'OUT') {
     /*******
      * BUY *
      *******/
 
-    // BULL RUN
-    const [ma_old, ma_new] = this.maHistory
-    if (this.currentTrend === 'bull' && macd > 0 && rsiTrend === 'UP' && ma_old.bma < ma_new.bma) {
-      this.buy(candle.close)
-      this.fiboLudo.start({ buyingCandle: candle })
-    }
+    // const [ma_old, ma_new] = this.maHistory
+    // if (this.currentTrend === 'bull' && macd > 0 && rsiTrend === 'UP' && ma_old.bma < ma_new.bma) {
+    //   this.buy(candle.close)
+    //   this.fiboLudo.start({ buyingCandle: candle })
+    // }
 
   }
 
@@ -88,16 +105,16 @@ method.check = function (candle) {
      * SELL *
      *******/
 
-    // CHECK INITIAL STOP LOSS
-    if (candle.close < this.buying_price * (1 - this.settings.INITIAL_STOP_LOSS)) {
-      return this.sell(`Trade margin = ${((candle.close - this.buying_price) / candle.close * 100).toFixed(2)}% STOP LOSS`)
-    }
-    // CHECK FIBOLUDO
-    this.fiboLudo.check({
-      candle,
-      settings: this.settings,
-      onSell: () => this.sell(`Trade margin = ${((candle.close - this.buying_price) / candle.close * 100).toFixed(2)}%`)
-    })
+    // // CHECK INITIAL STOP LOSS
+    // if (candle.close < this.buying_price * (1 - this.settings.INITIAL_STOP_LOSS)) {
+    //   return this.sell(`Trade margin = ${((candle.close - this.buying_price) / candle.close * 100).toFixed(2)}% STOP LOSS`)
+    // }
+    // // CHECK FIBOLUDO
+    // this.fiboLudo.check({
+    //   candle,
+    //   settings: this.settings,
+    //   onSell: () => this.sell(`Trade margin = ${((candle.close - this.buying_price) / candle.close * 100).toFixed(2)}%`)
+    // })
 
   }
 }

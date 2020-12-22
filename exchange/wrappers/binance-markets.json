@@ -69,6 +69,7 @@
     "FUEL",
     "GNT",
     "GRS",
+    "GRT",
     "GTO",
     "GVT",
     "GXS",
@@ -1885,6 +1886,17 @@
       "pair": [
         "ETH",
         "GRS"
+      ],
+      "minimalOrder": {
+        "amount": 1,
+        "price": 1e-8,
+        "order": 0.01
+      }
+    },
+    {
+      "pair": [
+        "ETH",
+        "GRT"
       ],
       "minimalOrder": {
         "amount": 1,

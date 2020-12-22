@@ -1,0 +1,13 @@
+# y = ax + b
+
+[BUY_LINE]
+a = 1
+b = 2
+
+[SELL_LINE]
+a = 1
+b = 2
+
+[STOP_LOSS]
+a = 1
+b = 2
