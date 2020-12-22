@@ -33,6 +33,7 @@ method.init = function () {
   this.candleHistory = []
   this.MAX_MACD_DIFF_SIZE = 2
   this.buy_reason = '?'
+  this.start_impulsion_price = 0
 
   // define the indicators we need
   this.addIndicator('small_ma', 'SMA', this.settings.SMALL_MA)
@@ -97,7 +98,7 @@ method.check = function (candle) {
     // BULL => BUY
     const [bma_old, bma_new] = this.bmaHistory
     const vol_avg = this.candleHistory.map(c => c.volume).reduce((a, b) => a + b) / this.settings.CANDLE_HISTORY_SIZE
-    if (bma_old < bma_new && candle.close > bb_up && candle.volume > vol_avg) {
+    if (bma_old < bma_new && candle.close > bb_up && candle.volume > vol_avg*this.settings.VOL_AVG_RATIO) {
       this.buy(candle.close, `Price = ${candle.close}`)
       this.highest_price = 0
     }
@@ -113,11 +114,11 @@ method.check = function (candle) {
 
     // START BULL RUN
     if (candle.close > this.buying_price + (this.buying_price * this.settings.WINNING_STOP_LOSS_THRESHOLD)) {
-
+      this.start_impulsion_price = candle.open
       // on retrace à balle
-      if (candle.low < this.highest_price - (this.highest_price - this.buying_price) * this.settings.WAVE_THRESHOLD_RETRACEMENT) {
+      if (candle.low < this.highest_price - (this.highest_price - this.start_impulsion_price) * this.settings.WAVE_THRESHOLD_RETRACEMENT) {
         if (!this.retracementPrice) this.retracementPrice = candle.low
-        if (candle.low < this.retracementPrice && this.retracementPrice>this.buying_price) {
+        if (candle.low < this.retracementPrice && this.retracementPrice > this.start_impulsion_price) {
           this.retracementPrice = candle.low
           console.log('Min price retracement = ', this.retracementPrice)
         }
@@ -126,6 +127,7 @@ method.check = function (candle) {
       // la vague remonte au dessus du max (la deuxieme vague est là)
       if (this.retracementPrice && candle.close > this.highest_price) {
         this.buying_price = this.retracementPrice
+        this.start_impulsion_price = this.retracementPrice
         this.retracementPrice = false
       }
 
